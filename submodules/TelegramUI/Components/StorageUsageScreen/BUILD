@@ -44,6 +44,7 @@ swift_library(
         "//submodules/GalleryData",
         "//submodules/SegmentedControlNode",
         "//submodules/TelegramUIPreferences",
+        "//submodules/LiquidGlass:LiquidGlass",
     ],
     visibility = [
         "//visibility:public",

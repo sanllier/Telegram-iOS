@@ -5,6 +5,7 @@ import Display
 import TelegramPresentationData
 import AppBundle
 import AccountContext
+import SwitchNode
 
 final class PeerInfoScreenSwitchItem: PeerInfoScreenItem {
     let id: AnyHashable
@@ -184,7 +185,7 @@ private final class PeerInfoScreenSwitchItemNode: PeerInfoScreenItemNode {
         
         transition.updateFrame(node: self.textNode, frame: textFrame)
         
-        if let switchView = self.switchNode.view as? UISwitch {
+        if let switchView = self.switchNode.view as? SwitchItem {
             if self.switchNode.bounds.size.width.isZero {
                 switchView.sizeToFit()
             }

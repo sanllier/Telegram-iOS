@@ -20,6 +20,7 @@ import CheckNode
 import AnimationCache
 import MultiAnimationRenderer
 import TextNodeWithEntities
+import SwitchNode
 
 private final class ShimmerEffectNode: ASDisplayNode {
     private var currentBackgroundColor: UIColor?
@@ -1061,7 +1062,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                 currentCheckNode = nil
             }
             
-            if let currentSwitchNode, let switchView = currentSwitchNode.view as? UISwitch {
+            if let currentSwitchNode, let switchView = currentSwitchNode.view as? SwitchItem {
                 if currentSwitchNode.bounds.size.width.isZero {
                     switchView.sizeToFit()
                 }

@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import AsyncDisplayKit
+import Display
 
 public class ActionSheetSwitchItem: ActionSheetItem {
     public let title: String
@@ -111,7 +112,7 @@ public class ActionSheetSwitchNode: ActionSheetItemNode {
         self.label.frame = CGRect(origin: CGPoint(x: 16.0, y: floorToScreenPixels((size.height - labelSize.height) / 2.0)), size: labelSize)
         
         var switchSize = CGSize(width: 51.0, height: 31.0)
-        if let switchView = self.switchNode.view as? UISwitch {
+        if let switchView = self.switchNode.view as? SwitchItem {
             if self.switchNode.bounds.size.width.isZero {
                 switchView.sizeToFit()
             }

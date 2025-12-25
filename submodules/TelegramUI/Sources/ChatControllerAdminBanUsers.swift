@@ -15,6 +15,7 @@ import StorageUsageScreen
 import SettingsUI
 import DeleteChatPeerActionSheetItem
 import OverlayStatusController
+import SwitchNode
 
 fileprivate struct InitialBannedRights {
     var value: TelegramChatBannedRights?

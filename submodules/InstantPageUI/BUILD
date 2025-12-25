@@ -27,6 +27,7 @@ swift_library(
         "//submodules/UndoUI:UndoUI",
         "//submodules/TranslateUI:TranslateUI",
         "//submodules/Tuples:Tuples",
+        "//submodules/SwitchNode:SwitchNode",
     ],
     visibility = [
         "//visibility:public",

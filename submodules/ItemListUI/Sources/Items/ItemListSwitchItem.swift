@@ -230,7 +230,7 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
     override public func didLoad() {
         super.didLoad()
         
-        (self.switchNode.view as? UISwitch)?.addTarget(self, action: #selector(self.switchValueChanged(_:)), for: .valueChanged)
+        (self.switchNode.view as? SwitchItem)?.addTarget(self, action: #selector(self.switchValueChanged(_:)), for: .valueChanged)
         self.switchGestureNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
     }
     
@@ -498,7 +498,7 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
                         }
                     }
                     
-                    if let switchView = strongSelf.switchNode.view as? UISwitch {
+                    if let switchView = strongSelf.switchNode.view as? SwitchItem {
                         if strongSelf.switchNode.bounds.size.width.isZero {
                             switchView.sizeToFit()
                         }
@@ -643,28 +643,29 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
             }
         }
     }
-    
+
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
         self.layer.allowsGroupOpacity = true
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.4, completion: { [weak self] _ in
             self?.layer.allowsGroupOpacity = false
         })
     }
-    
+
     override public func animateRemoved(_ currentTimestamp: Double, duration: Double) {
         self.layer.allowsGroupOpacity = true
         self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
-    
-    @objc private func switchValueChanged(_ switchView: UISwitch) {
+
+    @objc private func switchValueChanged(_ switchView: UIControl) {
+        guard let switchView = switchView as? SwitchItem else { assert(false); return }
         if let item = self.item {
             let value = switchView.isOn
             item.updated(value)
         }
     }
-    
+
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
-        if let item = self.item, let switchView = self.switchNode.view as? UISwitch, case .ended = recognizer.state {
+        if let item = self.item, let switchView = self.switchNode.view as? SwitchItem, case .ended = recognizer.state {
             if item.enabled && !item.displayLocked {
                 let value = switchView.isOn
                 item.updated(!value)

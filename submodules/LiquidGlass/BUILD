@@ -1,19 +1,19 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 swift_library(
-    name = "SwitchNode",
-    module_name = "SwitchNode",
+    name = "LiquidGlass",
+    module_name = "LiquidGlass",
     srcs = glob([
-        "Sources/**/*.swift",
+        "Source/**/*.swift",
     ]),
     copts = [
         "-warnings-as-errors",
     ],
     deps = [
-    	"//submodules/AsyncDisplayKit:AsyncDisplayKit",
-	    "//submodules/Display:Display",
+    	"//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/LegacyComponents:LegacyComponents",
-        "//submodules/LiquidGlass:LiquidGlass",
+        "//submodules/ComponentFlow:ComponentFlow",
     ],
     visibility = [
         "//visibility:public",

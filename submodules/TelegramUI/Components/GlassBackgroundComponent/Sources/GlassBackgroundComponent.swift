@@ -6,6 +6,7 @@ import ComponentDisplayAdapters
 import UIKitRuntimeUtils
 import CoreImage
 import AppBundle
+import LiquidGlass
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -292,12 +293,14 @@ public class GlassBackgroundView: UIView {
         public let isDark: Bool
         public let tintColor: TintColor
         public let isInteractive: Bool
+        public let alwaysRubberBanding: Bool
         
-        init(shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool) {
+        init(shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool, alwaysRubberBanding: Bool) {
             self.shape = shape
             self.isDark = isDark
             self.tintColor = tintColor
             self.isInteractive = isInteractive
+            self.alwaysRubberBanding = alwaysRubberBanding
         }
     }
     
@@ -315,10 +318,14 @@ public class GlassBackgroundView: UIView {
     private let contentContainer: ContentContainer
     
     private var innerBackgroundView: UIView?
-    
+
+    private let customGlassContainer: LGContainerView?
+
     public var contentView: UIView {
         if let nativeView = self.nativeView {
             return nativeView.contentView
+        } else if let customGlassContainer = self.customGlassContainer {
+            return customGlassContainer.contentView
         } else {
             return self.contentContainer
         }
@@ -345,15 +352,27 @@ public class GlassBackgroundView: UIView {
             
             self.foregroundView = nil
             self.shadowView = nil
-        } else {
+            self.customGlassContainer = nil
+        } else if GlassBackgroundView.useCustomGlassImpl {
             let backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 8.0)
             self.backgroundNode = backgroundNode
             self.nativeView = nil
             self.nativeViewClippingContext = nil
             self.nativeParamsView = nil
+            self.customGlassContainer = nil
+
             self.foregroundView = UIImageView()
-            
             self.shadowView = UIImageView()
+        } else {
+            self.backgroundNode = nil
+            self.nativeView = nil
+            self.nativeViewClippingContext = nil
+            self.nativeParamsView = nil
+            self.foregroundView = nil
+            self.shadowView = nil
+            
+            self.customGlassContainer = .init(frame: .zero)
+            self.customGlassContainer?.isInteractive = false
         }
         
         self.maskContainerView = UIView()
@@ -382,6 +401,9 @@ public class GlassBackgroundView: UIView {
             self.addSubview(foregroundView)
             foregroundView.mask = self.maskContainerView
         }
+        if let customGlassContainer = self.customGlassContainer {
+            self.addSubview(customGlassContainer)
+        }
         self.addSubview(self.contentContainer)
     }
     
@@ -394,6 +416,10 @@ public class GlassBackgroundView: UIView {
             if let result = nativeView.hitTest(self.convert(point, to: nativeView), with: event) {
                 return result
             }
+        } else if let customGlassContainer = customGlassContainer {
+            if let result = customGlassContainer.hitTest(self.convert(point, to: customGlassContainer), with: event) {
+                return result
+            }
         } else {
             if let result = self.contentContainer.hitTest(self.convert(point, to: self.contentContainer), with: event) {
                 return result
@@ -402,11 +428,11 @@ public class GlassBackgroundView: UIView {
         return nil
     }
         
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, alwaysRubberBanding: Bool = true, transition: ComponentTransition) {
+        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, alwaysRubberBanding: alwaysRubberBanding, transition: transition)
     }
     
-    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
+    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, alwaysRubberBanding: Bool = true, transition: ComponentTransition) {
         if let nativeView = self.nativeView, let nativeViewClippingContext = self.nativeViewClippingContext, (nativeView.bounds.size != size || nativeViewClippingContext.shape != shape) {
             
             nativeViewClippingContext.update(shape: shape, size: size, transition: transition)
@@ -415,6 +441,14 @@ public class GlassBackgroundView: UIView {
             } else {
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)
                 transition.setFrame(view: nativeView, frame: nativeFrame)
+            }
+        }
+        if let customGlassContainer = self.customGlassContainer {
+            if transition.animation.isImmediate {
+                customGlassContainer.frame = CGRect(origin: CGPoint(), size: size)
+            } else {
+                let nativeFrame = CGRect(origin: CGPoint(), size: size)
+                transition.setFrame(view: customGlassContainer, frame: nativeFrame)
             }
         }
         if let backgroundNode = self.backgroundNode {
@@ -468,7 +502,7 @@ public class GlassBackgroundView: UIView {
             innerBackgroundView.removeFromSuperview()
         }
         
-        let params = Params(shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive)
+        let params = Params(shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, alwaysRubberBanding: alwaysRubberBanding)
         if self.params != params {
             self.params = params
             
@@ -476,6 +510,7 @@ public class GlassBackgroundView: UIView {
             switch shape {
             case let .roundedRect(cornerRadius):
                 outerCornerRadius = cornerRadius
+                customGlassContainer?.layer.cornerRadius = cornerRadius
             }
             
             if let shadowView = self.shadowView {
@@ -523,6 +558,21 @@ public class GlassBackgroundView: UIView {
                             nativeParamsView.lumaMax = 1.0
                         }
                     }
+                }
+                if let customGlassContainer = self.customGlassContainer {
+                    customGlassContainer.lensProperties.update {
+                        $0.effectsProperties?.tintColor = {
+                            switch tintColor.kind {
+                            case .panel:
+                                let regular = LGLayer.LensProperties.regular()
+                                return regular.effectsProperties?.tintColor ?? .init(light: .clear, dark: .clear)
+                            case .custom:
+                                return .init(light: tintColor.color, dark: tintColor.color)
+                            }
+                        }()
+                    }
+                    customGlassContainer.isInteractive = params.isInteractive
+                    customGlassContainer.alwaysRubberBanding = params.alwaysRubberBanding
                 }
             }
         }

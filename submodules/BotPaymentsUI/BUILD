@@ -28,6 +28,7 @@ swift_library(
         "//submodules/CheckNode:CheckNode",
         "//submodules/TextFormat:TextFormat",
         "//submodules/Markdown:Markdown",
+        "//submodules/SwitchNode:SwitchNode",
     ],
     visibility = [
         "//visibility:public",

@@ -131,6 +131,7 @@ swift_library(
         "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/SliderComponent",
+        "//submodules/SwitchNode:SwitchNode",
     ],
     visibility = [
         "//visibility:public",

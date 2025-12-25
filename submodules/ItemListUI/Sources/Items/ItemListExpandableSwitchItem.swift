@@ -293,7 +293,7 @@ public class ItemListExpandableSwitchItemNode: ListViewItemNode, ItemListItemNod
     override public func didLoad() {
         super.didLoad()
         
-        (self.switchNode.view as? UISwitch)?.addTarget(self, action: #selector(self.switchValueChanged(_:)), for: .valueChanged)
+        (self.switchNode.view as? SwitchItem)?.addTarget(self, action: #selector(self.switchValueChanged(_:)), for: .valueChanged)
         self.switchGestureNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
     }
     
@@ -532,7 +532,7 @@ public class ItemListExpandableSwitchItemNode: ListViewItemNode, ItemListItemNod
                         transition.updateTransformRotation(node: strongSelf.expandArrowNode, angle: item.isExpanded ? CGFloat.pi * -0.5 : CGFloat.pi * 0.5)
                     }
                     
-                    if let switchView = strongSelf.switchNode.view as? UISwitch {
+                    if let switchView = strongSelf.switchNode.view as? SwitchItem {
                         if strongSelf.switchNode.bounds.size.width.isZero {
                             switchView.sizeToFit()
                         }
@@ -701,7 +701,8 @@ public class ItemListExpandableSwitchItemNode: ListViewItemNode, ItemListItemNod
         self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
     
-    @objc private func switchValueChanged(_ switchView: UISwitch) {
+    @objc private func switchValueChanged(_ switchView: UIControl) {
+        guard let switchView = switchView as? SwitchItem else { assert(false); return }
         if let item = self.item {
             let value = switchView.isOn
             item.updated(value)
@@ -709,7 +710,7 @@ public class ItemListExpandableSwitchItemNode: ListViewItemNode, ItemListItemNod
     }
     
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
-        if let item = self.item, let switchView = self.switchNode.view as? UISwitch, case .ended = recognizer.state {
+        if let item = self.item, let switchView = self.switchNode.view as? SwitchItem, case .ended = recognizer.state {
             if item.enabled {
                 let value = switchView.isOn
                 item.updated(!value)

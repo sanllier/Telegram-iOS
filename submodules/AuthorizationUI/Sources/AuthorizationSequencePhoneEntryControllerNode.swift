@@ -15,6 +15,7 @@ import TelegramAnimatedStickerNode
 import SolidRoundedButtonNode
 import AuthorizationUtils
 import ManagedAnimationNode
+import SwitchNode
 
 private final class PhoneAndCountryNode: ASDisplayNode {
     let strings: PresentationStrings
@@ -285,7 +286,7 @@ private final class ContactSyncNode: ASDisplayNode {
     
     func updateLayout(width: CGFloat) -> CGSize {
         var switchSize = CGSize(width: 51.0, height: 31.0)
-        if let switchView = self.switchNode.view as? UISwitch {
+        if let switchView = self.switchNode.view as? SwitchItem {
             if self.switchNode.bounds.size.width.isZero {
                 switchView.sizeToFit()
             }

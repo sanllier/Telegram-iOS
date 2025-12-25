@@ -6,6 +6,7 @@ import ComponentFlow
 import ComponentDisplayAdapters
 import TelegramPresentationData
 import SegmentedControlNode
+import LiquidGlass
 
 final class SegmentControlComponent: Component {
     struct Item: Equatable {
@@ -86,7 +87,7 @@ final class SegmentControlComponent: Component {
         private var component: SegmentControlComponent?
         
         private var nativeSegmentedView: SegmentedControlView?
-        private var legacySegmentedNode: SegmentedControlNode?
+        private var customSegmentedView: LGSegmentedControl?
         
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -136,37 +137,42 @@ final class SegmentControlComponent: Component {
                 controlSize.height = 36.0
                 segmentedView.frame = CGRect(origin: .zero, size: controlSize)
             } else {
-                let segmentedNode: SegmentedControlNode
-                if let current = self.legacySegmentedNode {
-                    segmentedNode = current
-                    
-                    if themeUpdated {
-                        let backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.itemBlocksBackgroundColor : component.theme.rootController.navigationBar.segmentedBackgroundColor
-                        let controlTheme = SegmentedControlTheme(backgroundColor: backgroundColor, foregroundColor: component.theme.rootController.navigationBar.segmentedForegroundColor, shadowColor: .clear, textColor: component.theme.rootController.navigationBar.segmentedTextColor, dividerColor: component.theme.rootController.navigationBar.segmentedDividerColor)
-                        segmentedNode.updateTheme(controlTheme)
-                    }
+                let segmentedView: LGSegmentedControl
+                if let current = self.customSegmentedView {
+                    segmentedView = current
                 } else {
-                    let mappedItems: [SegmentedControlItem] = component.items.map { item -> SegmentedControlItem in
-                        return SegmentedControlItem(title: item.title)
-                    }
-                    let backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.itemBlocksBackgroundColor : component.theme.rootController.navigationBar.segmentedBackgroundColor
-                    let controlTheme = SegmentedControlTheme(backgroundColor: backgroundColor, foregroundColor: component.theme.rootController.navigationBar.segmentedForegroundColor, shadowColor: .clear, textColor: component.theme.rootController.navigationBar.segmentedTextColor, dividerColor: component.theme.rootController.navigationBar.segmentedDividerColor)
-                    segmentedNode = SegmentedControlNode(theme: controlTheme, items: mappedItems, selectedIndex: component.items.firstIndex(where: { $0.id == component.selectedId }) ?? 0, cornerRadius: 18.0)
-                    self.legacySegmentedNode = segmentedNode
-                    self.addSubnode(segmentedNode)
-                    
-                    segmentedNode.selectedIndexChanged = { [weak self] index in
+                    segmentedView = LGSegmentedControl(
+                        frame: .zero,
+                        items: component.items.map { return .init(title: $0.title) },
+                        initialSelectedSegmentIndex: component.items.firstIndex(where: { $0.id == component.selectedId })
+                    )
+                    self.customSegmentedView = segmentedView
+                    self.addSubview(segmentedView)
+
+                    segmentedView.selectedIndexChanged = { [weak self] index in
                         guard let self, let component = self.component else {
                             return
                         }
                         component.action(component.items[index].id)
                     }
                 }
+
+                if themeUpdated {
+                    let backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.itemBlocksBackgroundColor : component.theme.rootController.navigationBar.segmentedBackgroundColor
+                    segmentedView.setTitleTextAttributes([
+                        .font: Font.semibold(14.0),
+                        .foregroundColor: component.theme.rootController.navigationBar.segmentedTextColor
+                    ])
+                    segmentedView.foregroundColor = component.theme.rootController.navigationBar.segmentedForegroundColor
+                    segmentedView.backgroundColor = backgroundColor
+                }
                 
-                controlSize = segmentedNode.updateLayout(SegmentedControlLayout.sizeToFit(maximumWidth: availableSize.width, minimumWidth: min(availableSize.width, 300.0), height: 36.0), transition: transition.containedViewLayoutTransition)
-                transition.containedViewLayoutTransition.updateFrame(node: segmentedNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: controlSize))
+                controlSize = segmentedView.sizeThatFits(availableSize)
+                controlSize.width = min(availableSize.width - 32.0, max(300.0, controlSize.width))
+                controlSize.height = 36.0
+                segmentedView.frame = CGRect(origin: .zero, size: controlSize)
             }
-            
+
             return controlSize
         }
     }

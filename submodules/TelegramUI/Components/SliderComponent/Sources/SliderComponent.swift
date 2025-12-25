@@ -5,6 +5,7 @@ import AsyncDisplayKit
 import TelegramPresentationData
 import LegacyComponents
 import ComponentFlow
+import LiquidGlass
 
 public final class SliderComponent: Component {
     public final class Discrete: Equatable {
@@ -124,6 +125,7 @@ public final class SliderComponent: Component {
     public final class View: UIView {
         private var nativeSliderView: SliderView?
         private var sliderView: TGPhotoEditorSliderView?
+        private var customSliderView: LGSlider?
         
         private var component: SliderComponent?
         private weak var state: EmptyComponentState?
@@ -141,7 +143,7 @@ public final class SliderComponent: Component {
         }
                 
         public func cancelGestures() {
-            if let sliderView = self.sliderView, let gestureRecognizers = sliderView.gestureRecognizers {
+            if let gestureRecognizers = (sliderView ?? customSliderView)?.gestureRecognizers {
                 for gestureRecognizer in gestureRecognizers {
                     gestureRecognizer.isEnabled = false
                     gestureRecognizer.isEnabled = true
@@ -188,7 +190,7 @@ public final class SliderComponent: Component {
                 sliderView.maximumTrackTintColor = component.trackBackgroundColor
                 
                 transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: 44.0)))
-            } else {
+            } else if !component.useNative {
                 var internalIsTrackingUpdated: ((Bool) -> Void)?
                 if let isTrackingUpdated = component.isTrackingUpdated {
                     internalIsTrackingUpdated = { [weak self] isTracking in
@@ -295,6 +297,39 @@ public final class SliderComponent: Component {
                 
                 transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: 44.0)))
                 sliderView.hitTestEdgeInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0)
+            } else {
+                let sliderView: LGSlider
+                if let current = self.customSliderView {
+                    sliderView = current
+                } else {
+                    sliderView = LGSlider(frame: .zero)
+                    sliderView.disablesInteractiveTransitionGestureRecognizer = true
+                    sliderView.addTarget(self, action: #selector(self.sliderValueChanged), for: .valueChanged)
+                    sliderView.layer.allowsGroupOpacity = true
+                    
+                    self.addSubview(sliderView)
+                    self.customSliderView = sliderView
+                    
+                    switch component.content {
+                    case let .continuous(continuous):
+                        sliderView.minimumValue = continuous.minValue ?? 0.0
+                        sliderView.maximumValue = 1.0
+                    case let .discrete(discrete):
+                        sliderView.minimumValue = 0.0
+                        sliderView.maximumValue = CGFloat(discrete.valueCount - 1)
+                        sliderView.trackConfiguration = .init(numberOfTicks: discrete.valueCount)
+                    }
+                }
+                switch component.content {
+                case let .continuous(continuous):
+                    sliderView.value = CGFloat(continuous.value)
+                case let .discrete(discrete):
+                    sliderView.value = CGFloat(discrete.value)
+                }
+                sliderView.minimumTrackTintColor = component.trackForegroundColor
+                sliderView.maximumTrackTintColor = component.trackBackgroundColor
+
+                transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: 44.0)))
             }
             
             return size
@@ -309,6 +344,8 @@ public final class SliderComponent: Component {
                 floatValue = sliderView.value
             } else if let nativeSliderView = self.nativeSliderView {
                 floatValue = CGFloat(nativeSliderView.value)
+            } else if let customSliderView = self.customSliderView {
+                floatValue = customSliderView.value
             } else {
                 return
             }

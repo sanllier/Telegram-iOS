@@ -10,18 +10,19 @@ import LottieComponent
 import UIKitRuntimeUtils
 import BundleIconComponent
 import TextBadgeComponent
+import LiquidGlass
 
 public final class TabBarComponent: Component {
     public final class Item: Equatable {
         public let item: UITabBarItem
-        public let action: (Bool) -> Void
+        public let action: (Bool, Bool) -> Void
         public let contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?
         
         fileprivate var id: AnyHashable {
             return AnyHashable(ObjectIdentifier(self.item))
         }
         
-        public init(item: UITabBarItem, action: @escaping (Bool) -> Void, contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?) {
+        public init(item: UITabBarItem, action: @escaping (Bool, Bool) -> Void, contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?) {
             self.item = item
             self.action = action
             self.contextAction = contextAction
@@ -73,13 +74,15 @@ public final class TabBarComponent: Component {
         }
         return true
     }
-    
+
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
         private let backgroundView: GlassBackgroundView
         private let selectionView: GlassBackgroundView.ContentImageView
         private let contextGestureContainerView: ContextControllerSourceView
         private let nativeTabBar: UITabBar?
-        
+        private let customGlassContentContainer: CustomGlassTabBarContentContainer?
+        private let liquidGlassSelectionLensView: LGControlThumbView?
+
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
         private var selectedItemViews: [AnyHashable: ComponentView<Empty>] = [:]
         
@@ -87,6 +90,8 @@ public final class TabBarComponent: Component {
         
         private var component: TabBarComponent?
         private weak var state: EmptyComponentState?
+        
+        private let innerInset: CGFloat = 3.0
         
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
@@ -128,8 +133,21 @@ public final class TabBarComponent: Component {
                     .foregroundColor: itemColor,
                     .font: itemFont
                 ]
+                self.customGlassContentContainer = nil
+                self.liquidGlassSelectionLensView = nil
             } else {
                 self.nativeTabBar = nil
+                self.customGlassContentContainer = CustomGlassTabBarContentContainer(frame: .zero)
+                let liquidGlassSelectionLensView = LGControlThumbView(
+                    baseLensProperties: .clear().updating { $0.effectsProperties = nil },
+                    magnification: (deselected: 1.0, selected: 0.9),
+                    selectionScale: .init(width: 1.25, height: 1.25),
+                    valocityScaleRangeWidth: 0.25,
+                    deselectedShadowRequired: false,
+                    deselectionMode: .disappearing
+                )
+                liquidGlassSelectionLensView.shouldAnimateSpeed = true
+                self.liquidGlassSelectionLensView = liquidGlassSelectionLensView
             }
             
             super.init(frame: frame)
@@ -138,20 +156,42 @@ public final class TabBarComponent: Component {
                 self.traitOverrides.verticalSizeClass = .compact
                 self.traitOverrides.horizontalSizeClass = .compact
             }
-            
+
             self.addSubview(self.contextGestureContainerView)
-            
+
             if let nativeTabBar = self.nativeTabBar {
                 self.contextGestureContainerView.addSubview(nativeTabBar)
                 nativeTabBar.delegate = self
-                /*let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.onLongPressGesture(_:)))
-                longPressGesture.delegate = self
-                self.addGestureRecognizer(longPressGesture)*/
             } else {
                 self.contextGestureContainerView.addSubview(self.backgroundView)
-                self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
             }
-            
+
+            if let selectionLensView = self.liquidGlassSelectionLensView {
+                selectionLensView.onSelectionProgressChanged = { [weak self] in
+                    self?.selectionView.alpha = 1.0 - $0
+                    self?.customGlassContentContainer?.selectionLensEffectsLayer.opacity = Float($0)
+                }
+                selectionLensView.onScaleTransformChanged = { [weak self] in
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
+                    let transform = CATransform3DMakeScale($0.width, $0.height, 1.0)
+                    self?.customGlassContentContainer.map {
+                        $0.selectionLensEffectsLayer.transform = transform
+                        $0.itemsContainerMaskLayer.transform = transform
+                        $0.selectedItemsContainerMaskLayer.transform = transform
+                        
+                    }
+                    CATransaction.commit()
+                    self?.selectionView.transform = .init(scaleX: $0.width, y: $0.height)
+                }
+                let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.onLongPressGesture(_:)))
+                longPressGesture.minimumPressDuration = 0.0
+                longPressGesture.allowableMovement = .infinity
+                longPressGesture.cancelsTouchesInView = false
+                longPressGesture.delegate = self
+                self.addGestureRecognizer(longPressGesture)
+            }
+
             self.contextGestureContainerView.shouldBegin = { [weak self] point in
                 guard let self, let component = self.component else {
                     return false
@@ -270,65 +310,96 @@ public final class TabBarComponent: Component {
             }
             if let index = tabBar.items?.firstIndex(where: { $0 === item }) {
                 if index < component.items.count {
-                    component.items[index].action(false)
+                    component.items[index].action(false, false)
                 }
             }
         }
-        
+
         public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
             return true
         }
-        
-        @objc private func onLongPressGesture(_ recognizer: UILongPressGestureRecognizer) {
-            if case .began = recognizer.state {
-                if let nativeTabBar = self.nativeTabBar {
-                    func cancelGestures(view: UIView) {
-                        for recognizer in view.gestureRecognizers ?? [] {
-                            if NSStringFromClass(type(of: recognizer)).contains("sSelectionGestureRecognizer") {
-                                recognizer.state = .cancelled
-                            }
-                        }
-                        for subview in view.subviews {
-                            cancelGestures(view: subview)
-                        }
-                    }
-                    
-                    cancelGestures(view: nativeTabBar)
+
+        private func getClosestItemView(to point: CGPoint) -> (AnyHashable, CGFloat)? {
+            var closestItemView: (AnyHashable, CGFloat)?
+            for (id, itemView) in self.itemViews {
+                guard let itemView = itemView.view else {
+                    continue
                 }
-            }
-        }
-        
-        @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
-            guard let component = self.component else {
-                return
-            }
-            if case .ended = recognizer.state {
-                let point = recognizer.location(in: self)
-                var closestItemView: (AnyHashable, CGFloat)?
-                for (id, itemView) in self.itemViews {
-                    guard let itemView = itemView.view else {
-                        continue
-                    }
-                    let distance = abs(point.x - itemView.center.x)
-                    if let previousClosestItemView = closestItemView {
-                        if previousClosestItemView.1 > distance {
-                            closestItemView = (id, distance)
-                        }
-                    } else {
+                let distance = abs(point.x - itemView.center.x)
+                if let previousClosestItemView = closestItemView {
+                    if previousClosestItemView.1 > distance {
                         closestItemView = (id, distance)
                     }
+                } else {
+                    closestItemView = (id, distance)
                 }
-                
+            }
+            return closestItemView
+        }
+
+        @objc private func onLongPressGesture(_ recognizer: UILongPressGestureRecognizer) {
+            guard let selectionLensView = self.liquidGlassSelectionLensView else { return }
+            switch recognizer.state {
+            case .began:
+                selectionLensView.setSelected(true)
+                let point = recognizer.location(in: self)
+                let closestItemView = getClosestItemView(to: point)
+                if let (id, _) = closestItemView, let itemView = itemViews[id]?.view {
+                    let transition = ComponentTransition(animation: .curve(duration: 0.32, curve: .spring))
+                    updateSelectionLayout(frame: itemView.frame, transition: transition)
+                }
+            case .changed:
+                let touchLocation = recognizer.location(in: backgroundView.contentView)
+                let maxXOrigin = backgroundView.contentView.bounds.width - selectionLensView.bounds.width - innerInset
+                let clampedXOrigin = min(max(innerInset, touchLocation.x - selectionLensView.bounds.width / 2.0), maxXOrigin)
+                let transition = ComponentTransition(animation: .curve(duration: 0.32, curve: .spring))
+                let targetFrame = CGRect(
+                    x: clampedXOrigin,
+                    y: innerInset,
+                    width: selectionLensView.frame.size.width,
+                    height: selectionLensView.frame.size.height
+                )
+                updateSelectionLayout(frame: targetFrame, transition: transition)
+            case .ended, .cancelled, .failed:
+                selectionLensView.setSelected(false)
+                guard let component = self.component else { return }
+                let point = recognizer.location(in: self)
+                let closestItemView = getClosestItemView(to: point)
                 if let (id, _) = closestItemView {
                     guard let item = component.items.first(where: { $0.id == id }) else {
                         return
                     }
-                    item.action(false)
-                    /*if previousSelectedIndex != closestNode.0 {
-                     if let selectedIndex = self.selectedIndex, let _ = self.tabBarItems[selectedIndex].item.animationName {
-                     container.imageNode.animationNode.play(firstFrame: false, fromIndex: nil)
-                     }
-                     }*/
+                    item.action(false, true)
+                }
+            default:
+                break
+            }
+        }
+
+        private func updateSelectionLayout(frame: CGRect?, transition: ComponentTransition) {
+            if let frame {
+                var selectionViewTransition = transition
+                if self.selectionView.superview == nil {
+                    selectionViewTransition = selectionViewTransition.withAnimation(.none)
+                    self.backgroundView.contentView.addSubview(self.selectionView)
+                }
+                selectionViewTransition.setPosition(layer: self.selectionView.layer, position: frame.center)
+                selectionViewTransition.setBounds(view: self.selectionView, bounds: .init(origin: .zero, size: frame.size))
+                if let liquidGlassSelectionLensView = self.liquidGlassSelectionLensView {
+                    if liquidGlassSelectionLensView.superview == nil {
+                        self.backgroundView.contentView.addSubview(liquidGlassSelectionLensView)
+                    }
+                    selectionViewTransition.setFrame(view: liquidGlassSelectionLensView, frame: frame)
+                }
+                if let customGlassContentContainer = self.customGlassContentContainer {
+                    if customGlassContentContainer.superview == nil {
+                        self.backgroundView.contentView.addSubview(customGlassContentContainer)
+                    }
+                    customGlassContentContainer.updateSelectionLayout(frame: frame, transition: transition)
+                }
+            } else {
+                if self.selectionView.superview != nil {
+                    self.selectionView.removeFromSuperview()
                 }
             }
         }
@@ -357,7 +428,6 @@ public final class TabBarComponent: Component {
         }
         
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            let innerInset: CGFloat = 3.0
             
             let availableSize = CGSize(width: min(500.0, availableSize.width), height: availableSize.height)
             
@@ -425,7 +495,11 @@ public final class TabBarComponent: Component {
             if self.selectionView.image?.size.height != itemSize.height {
                 self.selectionView.image = generateStretchableFilledCircleImage(radius: itemSize.height * 0.5, color: .white)?.withRenderingMode(.alwaysTemplate)
             }
-            self.selectionView.tintColor = component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
+            if #available(iOS 26.0, *) {
+                self.selectionView.tintColor = component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
+            } else {
+                self.selectionView.tintColor = .lightGray.withMultipliedAlpha(0.3)
+            }
             
             var validIds: [AnyHashable] = []
             var selectionFrame: CGRect?
@@ -451,15 +525,15 @@ public final class TabBarComponent: Component {
                     selectedItemView = ComponentView()
                     self.selectedItemViews[item.id] = selectedItemView
                 }
-                
+
                 let isItemSelected = component.selectedId == item.id
-                
+
                 let _ = itemView.update(
                     transition: itemTransition,
                     component: AnyComponent(ItemComponent(
                         item: item,
                         theme: component.theme,
-                        isSelected: self.nativeTabBar == nil ? isItemSelected : false
+                        isSelected: false
                     )),
                     environment: {},
                     containerSize: itemSize
@@ -474,7 +548,7 @@ public final class TabBarComponent: Component {
                     environment: {},
                     containerSize: itemSize
                 )
-                
+
                 let itemFrame = CGRect(origin: CGPoint(x: contentWidth, y: floor((contentHeight - itemSize.height) * 0.5)), size: itemSize)
                 if let itemComponentView = itemView.view as? ItemComponent.View, let selectedItemComponentView = selectedItemView.view as? ItemComponent.View {
                     if itemComponentView.superview == nil {
@@ -489,7 +563,8 @@ public final class TabBarComponent: Component {
                                 itemContainer.addSubview(selectedItemComponentView)
                             }
                         } else {
-                            self.contextGestureContainerView.addSubview(itemComponentView)
+                            self.customGlassContentContainer?.selectedItemsContainer.addSubview(selectedItemComponentView)
+                            self.customGlassContentContainer?.itemsContainer.addSubview(itemComponentView)
                         }
                     }
                     if self.nativeTabBar != nil {
@@ -499,7 +574,14 @@ public final class TabBarComponent: Component {
                             itemTransition.setFrame(view: selectedItemComponentView, frame: itemFrame)
                         }
                     } else {
-                        itemTransition.setFrame(view: itemComponentView, frame: itemFrame)
+                        [selectedItemComponentView, itemComponentView].forEach {
+                            itemTransition.setAnchorPoint(layer: $0.layer, anchorPoint: .init(x: 0.5, y: 0.5))
+                            itemTransition.setPosition(
+                                view: $0,
+                                position: itemFrame.center
+                            )
+                            itemTransition.setBounds(view: $0, bounds: .init(origin: .zero, size: itemFrame.size))
+                        }
                     }
                     
                     if let previousComponent, previousComponent.selectedId != item.id, isItemSelected {
@@ -528,22 +610,16 @@ public final class TabBarComponent: Component {
                 self.selectedItemViews.removeValue(forKey: id)
             }
             
-            if let selectionFrame, self.nativeTabBar == nil {
-                var selectionViewTransition = transition
-                if self.selectionView.superview == nil {
-                    selectionViewTransition = selectionViewTransition.withAnimation(.none)
-                    self.backgroundView.contentView.addSubview(self.selectionView)
-                }
-                selectionViewTransition.setFrame(view: self.selectionView, frame: selectionFrame)
-            } else if self.selectionView.superview != nil {
-                self.selectionView.removeFromSuperview()
-            }
-            
+            updateSelectionLayout(frame: selectionFrame, transition: transition)
+
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
-            
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
-            
+            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, alwaysRubberBanding: false, transition: transition)
+
+            if let customGlassContentContainer = self.customGlassContentContainer {
+                transition.setFrame(view: customGlassContentContainer, frame: CGRect(origin: CGPoint(), size: size))
+            }
+
             if self.nativeTabBar != nil {
                 let finalSize = CGSize(width: availableSize.width, height: 62.0)
                 transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: finalSize))
@@ -818,4 +894,84 @@ private final class ItemComponent: Component {
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
+}
+
+private final class CustomGlassTabBarContentContainer: UIView {
+    
+    let selectionLensEffectsLayer = LGLensEffectsLayer()
+
+    let itemsContainer = UIView(frame: .zero)
+    let itemsContainerMaskContainerLayer = CALayer()
+    let itemsContainerMaskLayer = CALayer()
+
+    let container = UIView(frame: .zero)
+    let selectedItemsContainer = UIView(frame: .zero)
+    let selectedItemsContainerMaskContainerLayer = CALayer()
+    let selectedItemsContainerMaskLayer = CALayer()
+    
+    override init(frame: CGRect) {
+        super.init(frame: .zero)
+        addSubview(container)
+        container.addSubview(selectedItemsContainer)
+        selectedItemsContainerMaskContainerLayer.backgroundColor = UIColor.clear.cgColor
+        selectedItemsContainerMaskLayer.backgroundColor = UIColor.black.cgColor
+        selectedItemsContainerMaskContainerLayer.addSublayer(selectedItemsContainerMaskLayer)
+        container.layer.mask = selectedItemsContainerMaskContainerLayer
+
+        addSubview(itemsContainer)
+        itemsContainerMaskContainerLayer.backgroundColor = UIColor.black.cgColor
+        itemsContainerMaskLayer.backgroundColor = UIColor.white.cgColor
+        itemsContainerMaskLayer.compositingFilter = "destOut"
+        itemsContainerMaskContainerLayer.addSublayer(itemsContainerMaskLayer)
+        itemsContainer.layer.mask = itemsContainerMaskContainerLayer
+
+        selectionLensEffectsLayer.effectsProperties = LGLayer.LensProperties.clear().updating {
+            $0.effectsProperties?.mirroringZoneWidth = 13.0
+            $0.effectsProperties?.visibleMirrorWidth = 3.0
+            $0.effectsProperties?.mirrorBlurRadius = 4.0
+            $0.effectsProperties?.mirrorBlurTransitionWidth = 3.0
+        }.effectsProperties
+        selectionLensEffectsLayer.opacity = 0.0
+        layer.addSublayer(selectionLensEffectsLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        container.frame = bounds
+        selectedItemsContainer.frame = bounds
+        selectedItemsContainerMaskContainerLayer.frame = container.bounds
+        itemsContainer.frame = bounds
+        itemsContainerMaskContainerLayer.frame = itemsContainer.bounds
+    }
+
+    func updateSelectionLayout(frame: CGRect?, transition: ComponentTransition) {
+        if let frame {
+            selectionLensEffectsLayer.isHidden = false
+            let cornerRadius = min(frame.width, frame.height) * 0.5
+            transition.setBounds(
+                layer: selectedItemsContainerMaskLayer,
+                bounds: .init(origin: .zero, size: frame.size)
+            )
+            transition.setPosition(layer: selectedItemsContainerMaskLayer, position: frame.center)
+            transition.setCornerRadius(layer: selectedItemsContainerMaskLayer, cornerRadius: cornerRadius)
+
+            transition.setBounds(
+                layer: itemsContainerMaskLayer,
+                bounds: .init(origin: .zero, size: frame.size)
+            )
+            transition.setPosition(layer: itemsContainerMaskLayer, position: frame.center)
+            transition.setCornerRadius(layer: itemsContainerMaskLayer, cornerRadius: cornerRadius)
+
+            transition.setBounds(layer: selectionLensEffectsLayer, bounds: .init(origin: .zero, size: frame.size))
+            transition.setPosition(layer: selectionLensEffectsLayer, position: frame.center)
+            transition.setCornerRadius(layer: selectionLensEffectsLayer, cornerRadius: cornerRadius)
+        } else {
+            selectionLensEffectsLayer.isHidden = true
+        }
+    }
+
 }

@@ -685,7 +685,7 @@ public final class ListActionItemComponent: Component {
                     }
                     
                     var switchSize = CGSize(width: 51.0, height: 31.0)
-                    if let switchView = switchNode.view as? UISwitch {
+                    if let switchView = switchNode.view as? SwitchItem {
                         if switchNode.bounds.size.width.isZero {
                             switchView.sizeToFit()
                         }
@@ -734,7 +734,7 @@ public final class ListActionItemComponent: Component {
                     }
                     
                     var switchSize = CGSize(width: 51.0, height: 31.0)
-                    if let switchView = switchNode.view as? UISwitch {
+                    if let switchView = switchNode.view as? SwitchItem {
                         if switchNode.bounds.size.width.isZero {
                             switchView.sizeToFit()
                         }

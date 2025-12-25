@@ -39,3 +39,50 @@ bool getLayerDisableScreenshots(CALayer * _Nonnull layer);
 void setLayerContentsMaskMode(CALayer * _Nonnull layer, bool maskMode);
 
 void setMonochromaticEffectImpl(UIView * _Nonnull view, bool isEnabled);
+
+@protocol _CABackdropLayer<NSObject>
+
+@end
+
+CALayer<_CABackdropLayer> * _Nullable createCABackdropLayer(void);
+
+@protocol _CAFilter<NSObject>
+-(void)setValue:(id _Nullable)value forKey:(NSString * _Nonnull)key;
+@end
+
+NSObject<_CAFilter> * _Nullable createCAFilter(NSString * _Nonnull name);
+
+@protocol _CAMutableMeshTransform<NSObject>
+-(void)setSubdivisionSteps:(int)arg1;
+@end
+
+typedef struct CAPoint3D {
+    CGFloat x;
+    CGFloat y;
+    CGFloat z;
+} CAPoint3D;
+
+typedef struct CAMeshVertex {
+    CGPoint from;
+    CAPoint3D to;
+} CAMeshVertex;
+
+typedef struct CAMeshFace {
+    unsigned int indices[4];
+    float w[4];
+} CAMeshFace;
+
+extern NSString * _Nullable const kCADepthNormalizationNone;
+extern NSString * _Nullable const kCADepthNormalizationWidth;
+extern NSString * _Nullable const kCADepthNormalizationHeight;
+extern NSString * _Nullable const kCADepthNormalizationMin;
+extern NSString * _Nullable const kCADepthNormalizationMax;
+extern NSString * _Nullable const kCADepthNormalizationAverage;
+
+NSObject<_CAMutableMeshTransform> * _Nullable createCAMutableMeshTransform(
+                                                                           NSUInteger vertexCount,
+                                                                           CAMeshVertex * _Nonnull vertices,
+                                                                           NSUInteger faceCount,
+                                                                           CAMeshFace * _Nonnull faces,
+                                                                           NSString * _Nullable depthNormalization
+                                                                           );

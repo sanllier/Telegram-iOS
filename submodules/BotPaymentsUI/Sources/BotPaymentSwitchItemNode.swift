@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramPresentationData
+import SwitchNode
 
 private let titleFont = Font.regular(17.0)
 

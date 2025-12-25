@@ -68,6 +68,7 @@ final class TabBarControllerNode: ASDisplayNode {
     
     private var layoutResult: LayoutResult?
     private var isUpdateRequested: Bool = false
+    private var isGestureFinalizing: Bool = false
     private var isChangingSelectedIndex: Bool = false
     
     func setCurrentControllerNode(_ node: ASDisplayNode?) -> () -> Void {
@@ -115,7 +116,7 @@ final class TabBarControllerNode: ASDisplayNode {
             guard let self else {
                 return
             }
-            if self.isUpdateRequested {
+            if self.isUpdateRequested || self.isGestureFinalizing {
                 self.isUpdateRequested = false
                 if let layoutResult = self.layoutResult {
                     let _ = self.updateImpl(params: layoutResult.params, transition: .immediate)
@@ -178,6 +179,11 @@ final class TabBarControllerNode: ASDisplayNode {
         self.view.setNeedsLayout()
     }
     
+    private func setGestureFinalizing() {
+        self.isGestureFinalizing = true
+        self.view.setNeedsLayout()
+    }
+    
     private func updateImpl(params: Params, transition: ContainedViewLayoutTransition) -> CGFloat {
         var options: ContainerViewLayoutInsetOptions = []
         if params.layout.metrics.widthClass == .regular {
@@ -197,9 +203,16 @@ final class TabBarControllerNode: ASDisplayNode {
             selectedId = ObjectIdentifier(self.tabBarItems[self.selectedIndex].item)
         }
         var tabBarTransition = ComponentTransition(transition)
+        let springTransation = ComponentTransition.spring(duration: 0.4)
         if self.isChangingSelectedIndex {
             self.isChangingSelectedIndex = false
-            tabBarTransition = .spring(duration: 0.4)
+            tabBarTransition = springTransation
+        }
+        var forceUpdateNeeded: Bool = false
+        if self.isGestureFinalizing {
+            self.isGestureFinalizing = false
+            tabBarTransition = springTransation
+            forceUpdateNeeded = true
         }
         if self.tabBarView.view == nil {
             tabBarTransition = .immediate
@@ -212,11 +225,14 @@ final class TabBarControllerNode: ASDisplayNode {
                     let itemId = AnyHashable(ObjectIdentifier(item.item))
                     return TabBarComponent.Item(
                         item: item.item,
-                        action: { [weak self] isLongTap in
+                        action: { [weak self] isLongTap, isGestureFinalizing in
                             guard let self else {
                                 return
                             }
                             if let index = self.tabBarItems.firstIndex(where: { AnyHashable(ObjectIdentifier($0.item)) == itemId }) {
+                                if self.selectedIndex == index && isGestureFinalizing {
+                                    self.setGestureFinalizing()
+                                }
                                 self.itemSelected(index, isLongTap, [])
                             }
                         },
@@ -234,6 +250,7 @@ final class TabBarControllerNode: ASDisplayNode {
                 isTablet: params.layout.metrics.isTablet
             )),
             environment: {},
+            forceUpdate: forceUpdateNeeded,
             containerSize: CGSize(width: params.layout.size.width - sideInset * 2.0, height: 100.0)
         )
         let tabBarFrame = CGRect(origin: CGPoint(x: floor((params.layout.size.width - tabBarSize.width) * 0.5), y: params.layout.size.height - (self.tabBarHidden ? 0.0 : (tabBarSize.height + bottomInset))), size: tabBarSize)

@@ -359,3 +359,81 @@ void setMonochromaticEffectImpl(UIView * _Nonnull view, bool isEnabled) {
         }
     }
 }
+
+CALayer<_CABackdropLayer> * _Nullable createCABackdropLayer(void) {
+    static Class objClass = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        objClass = NSClassFromString([@[@"CA", @"Backdrop", @"Layer"] componentsJoinedByString:@""]);
+    });
+    if (!objClass) {
+        return nil;
+    }
+    CALayer<_CABackdropLayer> *obj = [[objClass alloc] init];
+    if (!objClass) {
+        return nil;
+    }
+    return obj;
+}
+
+NSObject<_CAFilter> * _Nullable createCAFilter(NSString * _Nonnull name) {
+    static Class objClass = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        objClass = NSClassFromString([@[@"CA", @"Filter"] componentsJoinedByString:@""]);
+    });
+    if (!objClass) {
+        return nil;
+    }
+    SEL selector = NSSelectorFromString([@[@"filter", @"WithType", @":"] componentsJoinedByString:@""]);
+    if (![objClass respondsToSelector:selector]) {
+        return nil;
+    }
+    NSMethodSignature *signature = [objClass methodSignatureForSelector:selector];
+    if (!signature) {
+        return nil;
+    }
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    [invocation setTarget:objClass];
+    [invocation setSelector:selector];
+    [invocation setArgument:&name atIndex:2];
+    [invocation invoke];
+    id __unsafe_unretained result = nil;
+    [invocation getReturnValue:&result];
+    return result;
+}
+
+NSObject<_CAMutableMeshTransform> * _Nullable createCAMutableMeshTransform(
+                                                                           NSUInteger vertexCount,
+                                                                           CAMeshVertex * _Nonnull vertices,
+                                                                           NSUInteger faceCount,
+                                                                           CAMeshFace * _Nonnull faces,
+                                                                           NSString * _Nullable depthNormalization
+                                                                           )
+{
+    static Class objClass = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        objClass = NSClassFromString([@[@"CA", @"MutableMesh", @"Transform"] componentsJoinedByString:@""]);
+    });
+    if (!objClass) {
+        return nil;
+    }
+    SEL selector = NSSelectorFromString(@"meshTransformWithVertexCount:vertices:faceCount:faces:depthNormalization:");
+    NSMethodSignature *signature = [objClass methodSignatureForSelector:selector];
+    if (!signature) {
+        return nil;
+    }
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    [invocation setTarget:objClass];
+    [invocation setSelector:selector];
+    [invocation setArgument:&vertexCount atIndex:2];
+    [invocation setArgument:&vertices atIndex:3];
+    [invocation setArgument:&faceCount atIndex:4];
+    [invocation setArgument:&faces atIndex:5];
+    [invocation setArgument:&depthNormalization atIndex:6];
+    [invocation invoke];
+    id __unsafe_unretained meshTransform;
+    [invocation getReturnValue:&meshTransform];
+    return meshTransform;
+}
